@@ -3,7 +3,6 @@ import { idSchema } from "../validate.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { del } from "../client.js";
 import { fail, ok } from "../format.js";
-import { guarded } from "../protect.js";
 import type { DeleteResponse } from "../types.js";
 
 export function register(server: McpServer) {
@@ -12,14 +11,14 @@ export function register(server: McpServer) {
     {
       title: "Force-delete datastore",
       description:
-        "FORCE-DELETE any user's datastore as admin. This destroys the cluster and its data and cannot be undone. Requires confirm=true and is blocked while protection mode (CCX_PROTECT) is on.",
+        "FORCE-DELETE any user's datastore as admin. This destroys the cluster and its data and cannot be undone. Requires confirm=true. Only available when protection mode is off (CCX_PROTECT=false).",
       inputSchema: {
         datastore_id: idSchema.describe("Datastore UUID to delete"),
         confirm: z.boolean().describe("Must be explicitly true to proceed"),
       },
       annotations: { destructiveHint: true, idempotentHint: false },
     },
-    guarded("Delete datastore", async ({ datastore_id, confirm }) => {
+    async ({ datastore_id, confirm }) => {
       if (!confirm) {
         return fail("Deletion aborted", new Error("'confirm' must be explicitly set to true; this destroys the cluster and its data"));
       }
@@ -33,6 +32,6 @@ export function register(server: McpServer) {
       } catch (e) {
         return fail(`Error deleting datastore ${datastore_id}`, e);
       }
-    }),
+    },
   );
 }

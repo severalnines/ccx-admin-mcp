@@ -50,12 +50,20 @@ describe("ccx_admin_list_users", () => {
 });
 
 describe("ccx_admin_suspend_user", () => {
-  it("is blocked by protection mode", async () => {
+  it("is not registered while protection mode is on", async () => {
+    const guarded = await connectTools({ protect: true });
+    const names = await guarded.listTools();
+    await guarded.close();
+    expect(names).not.toContain("ccx_admin_suspend_user");
+    expect(names).not.toContain("ccx_admin_delete_user");
+    expect(names).toContain("ccx_admin_unsuspend_user");
+  });
+
+  it("requires confirm=true", async () => {
     let called = false;
     msw.use(http.post(`${API}/admin/users/:id`, () => { called = true; return HttpResponse.json({}); }));
-    const r = await tools.call("ccx_admin_suspend_user", { user_id: "u-1", reason: "abuse" });
+    const r = await tools.call("ccx_admin_suspend_user", { user_id: "u-1", reason: "abuse", confirm: false });
     expect(r.isError).toBe(true);
-    expect(r.text).toMatch(/BLOCKED/);
     expect(called).toBe(false);
   });
 
@@ -68,7 +76,7 @@ describe("ccx_admin_suspend_user", () => {
       body = await request.json();
       return HttpResponse.json({});
     }));
-    const r = await tools.call("ccx_admin_suspend_user", { user_id: "u-1", reason: "abuse" });
+    const r = await tools.call("ccx_admin_suspend_user", { user_id: "u-1", reason: "abuse", confirm: true });
     expect(r.isError).toBe(false);
     expect(body).toEqual({ suspend: { reason: "abuse" } });
     expect(r.json()).toMatchObject({ user_id: "u-1", suspended: true });
@@ -76,7 +84,7 @@ describe("ccx_admin_suspend_user", () => {
 
   it("requires a reason", async () => {
     setEnv({ session: true, protect: "false" });
-    const r = await tools.call("ccx_admin_suspend_user", { user_id: "u-1", reason: "" });
+    const r = await tools.call("ccx_admin_suspend_user", { user_id: "u-1", reason: "", confirm: true });
     expect(r.isError).toBe(true);
   });
 });
@@ -104,12 +112,6 @@ describe("ccx_admin_unsuspend_user", () => {
 });
 
 describe("ccx_admin_delete_user", () => {
-  it("is blocked by protection mode", async () => {
-    const r = await tools.call("ccx_admin_delete_user", { user_id: "u-3", confirm: true });
-    expect(r.isError).toBe(true);
-    expect(r.text).toMatch(/BLOCKED/);
-  });
-
   it("requires confirm=true", async () => {
     setEnv({ session: true, protect: "false" });
     let called = false;

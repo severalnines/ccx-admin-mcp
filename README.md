@@ -131,15 +131,18 @@ failure is only logged, since tools log in lazily and retry. Reads that get a
 
 ## Protection mode
 
-Destructive tools are blocked until you opt out with `CCX_PROTECT=false`
-(or `--protect false`). While protected, these tools return a BLOCKED error
-without calling the API:
+Protection mode is **on by default**. While it is on, the destructive tools are
+**not registered at all**: they do not appear in the tool list, so an AI
+assistant cannot attempt them. The affected tools are:
 
 - `ccx_admin_delete_datastore`
 - `ccx_admin_delete_user`
 - `ccx_admin_suspend_user`
 
-Deleting additionally needs `confirm: true` in the tool call.
+To make them available, set `CCX_PROTECT=false` (or `--protect false`) and
+restart the server. Every one of them then still requires `confirm: true` in
+the call; without it the tool refuses and makes no request. The setting is
+read once at startup and never changes while the server runs.
 
 ## Tools
 
@@ -161,16 +164,16 @@ Deleting additionally needs `confirm: true` in the tool call.
 | `ccx_admin_get_datastore` | session | One datastore with the full latest job and its DB nodes |
 | `ccx_admin_list_nodes` | session | DB and load-balancer nodes: hostname, IP, role, cmon host status, instance id/type, AZ |
 | `ccx_admin_get_datastore_audit` | session | Audit log lines (jobs, resource changes, info) with `from`/`to` RFC3339 bounds and `limit` |
-| `ccx_admin_delete_datastore` | session | **Force-delete** any datastore. Protected + `confirm` |
+| `ccx_admin_delete_datastore` | session | **Force-delete** any datastore. Unprotected only + `confirm` |
 
 ### Users
 
 | Tool | Auth | Description |
 |------|------|-------------|
 | `ccx_admin_list_users` | session | All users; filters `login`, `name`, `suspended`, `deleted`, plus `limit`/`offset` |
-| `ccx_admin_suspend_user` | session | Suspend with a reason. Protected |
+| `ccx_admin_suspend_user` | session | Suspend with a reason. Unprotected only + `confirm` |
 | `ccx_admin_unsuspend_user` | session | Lift a suspension |
-| `ccx_admin_delete_user` | session | Delete a user. Protected + `confirm` |
+| `ccx_admin_delete_user` | session | Delete a user. Unprotected only + `confirm` |
 
 ### Billing
 

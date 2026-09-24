@@ -201,13 +201,12 @@ describe("ccx_admin_get_datastore_audit", () => {
 });
 
 describe("ccx_admin_delete_datastore", () => {
-  it("is blocked by protection mode without touching the API", async () => {
-    let called = false;
-    msw.use(http.delete(`${API}/admin/datastores/:id`, () => { called = true; return HttpResponse.json({ deleted: true }); }));
-    const r = await tools.call("ccx_admin_delete_datastore", { datastore_id: "ds-1111-aaaa", confirm: true });
-    expect(r.isError).toBe(true);
-    expect(r.text).toMatch(/BLOCKED/);
-    expect(called).toBe(false);
+  it("is not registered while protection mode is on", async () => {
+    const guarded = await connectTools({ protect: true });
+    const names = await guarded.listTools();
+    await guarded.close();
+    expect(names).not.toContain("ccx_admin_delete_datastore");
+    expect(names).toContain("ccx_admin_list_datastores");
   });
 
   it("requires confirm=true even when unprotected", async () => {

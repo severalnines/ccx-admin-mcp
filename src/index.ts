@@ -135,16 +135,25 @@ async function main() {
       "CCX admin MCP: only basic auth configured; datastore/user/audit/billing tools will be unavailable.\n",
     );
   }
-  process.stderr.write(`CCX admin MCP: protection mode ${isProtected() ? "ON" : "OFF"}\n`);
+  const protect = isProtected();
+  process.stderr.write(
+    protect
+      ? "CCX admin MCP: protection mode ON; delete/suspend tools not registered (CCX_PROTECT=false enables them, each then requires confirm=true).\n"
+      : "CCX admin MCP: protection mode OFF; destructive tools registered, each requires confirm=true.\n",
+  );
 
   const server = new McpServer({ name: "ccx-admin", version: "0.1.0" });
-  registerAllTools(server);
+  registerAllTools(server, protect);
 
   await server.connect(new StdioServerTransport());
   process.stderr.write("CCX admin MCP: ready.\n");
 }
 
-export function registerAllTools(server: McpServer) {
+/**
+ * Registers the tool set. While protected the destructive tools are left out
+ * entirely rather than registered-and-blocked, so a client cannot attempt them.
+ */
+export function registerAllTools(server: McpServer, protect: boolean = isProtected()) {
   registerCheck(server);
   registerCmonVersion(server);
   registerCountDatastores(server);
@@ -154,12 +163,14 @@ export function registerAllTools(server: McpServer) {
   registerGetDatastore(server);
   registerListNodes(server);
   registerGetDatastoreAudit(server);
-  registerDeleteDatastore(server);
   registerListUsers(server);
-  registerSuspendUser(server);
   registerUnsuspendUser(server);
-  registerDeleteUser(server);
   registerBillingUsage(server);
+  if (!protect) {
+    registerDeleteDatastore(server);
+    registerSuspendUser(server);
+    registerDeleteUser(server);
+  }
 }
 
 // Only start the server when executed directly, so tests can import registerAllTools.

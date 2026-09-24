@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { isProtected, protectedError } from "../src/protect.js";
+import { isProtected } from "../src/protect.js";
+import { connectTools } from "./helpers.js";
 
 describe("isProtected", () => {
   afterEach(() => delete process.env.CCX_PROTECT);
@@ -18,11 +19,22 @@ describe("isProtected", () => {
   });
 });
 
-describe("protectedError", () => {
-  it("is an error mentioning the operation and how to unlock", () => {
-    const r = protectedError("Delete user");
-    expect(r.isError).toBe(true);
-    expect(r.content[0].text).toContain("Delete user");
-    expect(r.content[0].text).toContain("CCX_PROTECT=false");
+const DESTRUCTIVE = ["ccx_admin_delete_datastore", "ccx_admin_delete_user", "ccx_admin_suspend_user"];
+
+describe("registerAllTools", () => {
+  it("leaves the destructive tools out while protected", async () => {
+    const t = await connectTools({ protect: true });
+    const names = await t.listTools();
+    await t.close();
+    for (const name of DESTRUCTIVE) expect(names).not.toContain(name);
+    expect(names).toHaveLength(12);
+  });
+
+  it("registers them when unprotected", async () => {
+    const t = await connectTools({ protect: false });
+    const names = await t.listTools();
+    await t.close();
+    for (const name of DESTRUCTIVE) expect(names).toContain(name);
+    expect(names).toHaveLength(15);
   });
 });

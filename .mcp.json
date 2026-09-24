@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ccx-admin": {
+      "command": "node",
+      "args": ["build/index.js"]
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "admin-1",
+  "login": "admin@example.com",
+  "isAdmin": true,
+  "scopes": [
+    {
+      "id": "admin-1",
+      "type": "admin-user",
+      "role": "super-admin",
+      "name": "CCX admin"
+    }
+  ]
+}

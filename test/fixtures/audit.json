@@ -1,0 +1,36 @@
+{
+  "lines": [
+    {
+      "text": "Job finished: remove_node",
+      "user": "system",
+      "time": "2026-09-21T08:12:43.357825Z",
+      "type": "job",
+      "data": {
+        "id": "2d01aadc-4049-4726-920b-7c4728de5b4c",
+        "type": "remove_node",
+        "status": "finished"
+      }
+    },
+    {
+      "text": "Info: Now 2 nodes",
+      "user": "system",
+      "time": "2026-09-21T08:12:43.222614Z",
+      "type": "info",
+      "data": {
+        "message": "Now 2 nodes"
+      }
+    },
+    {
+      "text": "Resource deleted: floatingip",
+      "user": "system",
+      "time": "2026-09-21T08:12:43.128457Z",
+      "type": "delete_resource",
+      "data": {
+        "id": "",
+        "type": "floatingip",
+        "cloud": "elastx:se-sto",
+        "external_id": "0d2b70c2-89e4-4283-a28b-8d1437bd9bd7"
+      }
+    }
+  ]
+}

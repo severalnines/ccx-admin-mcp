@@ -7,6 +7,17 @@ export function isProtected(): boolean {
   return val !== "false" && val !== "0";
 }
 
+/**
+ * Wrap a destructive tool handler so the protection check lives in one place:
+ * while protected the handler is never invoked and no request is made.
+ */
+export function guarded<A, R>(operation: string, handler: (args: A) => Promise<R>) {
+  return async (args: A): Promise<R | ReturnType<typeof protectedError>> => {
+    if (isProtected()) return protectedError(operation);
+    return handler(args);
+  };
+}
+
 export function protectedError(operation: string) {
   return {
     content: [

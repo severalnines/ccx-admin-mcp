@@ -1,8 +1,9 @@
-import { z } from "zod";
+import { idSchema } from "../validate.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { get } from "../client.js";
 import { fail, ok } from "../format.js";
 import type { GetDatastoreResponse } from "../types.js";
+import { summarizeDatastore } from "./list_datastores.js";
 import { summarizeNode } from "./list_nodes.js";
 
 export function register(server: McpServer) {
@@ -13,7 +14,7 @@ export function register(server: McpServer) {
       description:
         "Get one datastore by UUID regardless of owner: status, owner login, cmon internal cluster id, the latest job (including its raw data) and the database nodes.",
       inputSchema: {
-        datastore_id: z.string().min(1).describe("Datastore UUID"),
+        datastore_id: idSchema.describe("Datastore UUID"),
       },
       annotations: { readOnlyHint: true, idempotentHint: true },
     },
@@ -21,16 +22,7 @@ export function register(server: McpServer) {
       try {
         const d = (await get(`/admin/datastores/${encodeURIComponent(datastore_id)}`)) as GetDatastoreResponse;
         return ok({
-          id: d.id,
-          name: d.name,
-          status: d.status,
-          status_text: d.status_text,
-          type: d.type,
-          cloud_provider: d.cloud_provider,
-          size: d.size,
-          user_login: d.user_login,
-          internal_id: d.internal_id,
-          created_at: d.created_at,
+          ...summarizeDatastore(d),
           current_job: d.current_job?.job_id ? d.current_job : null,
           nodes: (d.nodes ?? []).map(summarizeNode),
         });

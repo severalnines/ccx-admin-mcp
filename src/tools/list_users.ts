@@ -2,7 +2,20 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { get } from "../client.js";
 import { contains, fail, ok, page } from "../format.js";
-import type { ListUsersResponse } from "../types.js";
+import type { ListUsersResponse, User } from "../types.js";
+
+/** Explicit allowlist so undeclared backend fields never reach the client. */
+export function summarizeUser(u: User) {
+  return {
+    id: u.id,
+    login: u.login,
+    first_name: u.first_name,
+    last_name: u.last_name,
+    created_at: u.created_at,
+    suspended: u.suspended === true,
+    deleted: u.deleted === true,
+  };
+}
 
 export function register(server: McpServer) {
   server.registerTool(
@@ -38,7 +51,7 @@ export function register(server: McpServer) {
           suspended: all.filter((u) => u.suspended).length,
           deleted: all.filter((u) => u.deleted).length,
           pagination,
-          users: items,
+          users: items.map(summarizeUser),
         });
       } catch (e) {
         return fail("Error listing users", e);

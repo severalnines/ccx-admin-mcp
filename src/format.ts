@@ -10,10 +10,13 @@ export function ok(data: unknown): ToolResult {
   return { content: [{ type: "text", text }] };
 }
 
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function fail(context: string, error: unknown): ToolResult {
-  const message = error instanceof Error ? error.message : String(error);
   return {
-    content: [{ type: "text", text: `${context}: ${message}` }],
+    content: [{ type: "text", text: `${context}: ${errorMessage(error)}` }],
     isError: true,
   };
 }

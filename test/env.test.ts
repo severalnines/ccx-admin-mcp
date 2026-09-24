@@ -3,11 +3,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-
-function packageRoot(): string {
-  return resolve(fileURLToPath(import.meta.url), "..", "..");
-}
-import { parseDotenv, loadDotenv, envFileCandidates } from "../src/env.js";
+import { parseDotenv, loadDotenv, envFileCandidates, packageRoot } from "../src/env.js";
 
 describe("parseDotenv", () => {
   it("parses plain, quoted, exported and commented lines", () => {
@@ -18,6 +14,7 @@ export CCX_ADMIN_USERNAME=admin@example.com
 CCX_ADMIN_PASSWORD="p#ss word"
 SINGLE='x y'
 INLINE=value # trailing comment
+QUOTED_COMMENT="p#ss" # staging
 EMPTY=
 not a valid line
 `);
@@ -27,6 +24,7 @@ not a valid line
       CCX_ADMIN_PASSWORD: "p#ss word",
       SINGLE: "x y",
       INLINE: "value",
+      QUOTED_COMMENT: "p#ss",
       EMPTY: "",
     });
   });
@@ -68,11 +66,18 @@ describe("loadDotenv", () => {
     expect(() => loadDotenv("/nonexistent/dir/.env")).toThrow(/env file not found/);
   });
 
-  it("puts the explicit path first, then cwd, then the package root, without duplicates", () => {
-    const c = envFileCandidates("/x/.env");
-    expect(c[0]).toBe("/x/.env");
-    expect(c[1]).toBe(join(process.cwd(), ".env"));
-    expect(c[c.length - 1]).toBe(join(process.cwd(), ".env").replace(process.cwd(), packageRoot()));
-    expect(new Set(c).size).toBe(c.length);
+  it("searches the explicit path, then the package root, and never the working directory", () => {
+    const expectedRoot = resolve(fileURLToPath(import.meta.url), "..", "..");
+    expect(packageRoot()).toBe(expectedRoot);
+    expect(envFileCandidates("/x/.env")).toEqual(["/x/.env", join(expectedRoot, ".env")]);
+    expect(envFileCandidates()).toEqual([join(expectedRoot, ".env")]);
+    // even if cwd differs from the package root it must not be consulted
+    const cwd = process.cwd();
+    process.chdir(tmpdir());
+    try {
+      expect(envFileCandidates()).toEqual([join(expectedRoot, ".env")]);
+    } finally {
+      process.chdir(cwd);
+    }
   });
 });

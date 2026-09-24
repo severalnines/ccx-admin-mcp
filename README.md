@@ -43,10 +43,16 @@ cp .env.example .env     # fill in CCX_BASE_URL and the credentials
 Prefer the `.env` file (or the client's `env` block) over `--password` flags:
 command-line arguments are visible to every process on the machine via `ps`.
 
-`.env` is git-ignored and only `CCX_*` keys are read from it. The server looks for it in this order: `--dotenv` /
-`CCX_ENV_FILE`, then `./.env` in the working directory, then `.env` next to
-`package.json`. Variables already set in the environment (or given as flags)
-always win over the file.
+`.env` is git-ignored and only `CCX_*` keys are read from it. The server looks
+for it at `--dotenv` / `CCX_ENV_FILE` if given, otherwise at `.env` next to
+`package.json`. The working directory is deliberately not searched: MCP clients
+start servers inside arbitrary projects, and a `.env` there could switch
+protection off or redirect the credentials. Variables already set in the
+environment (or given as flags) always win over the file.
+
+`CCX_BASE_URL` must be `https://` (plain `http://` is only accepted for
+localhost), and the server never follows redirects, so the admin password and
+session cookie cannot be replayed to another host.
 
 ### Claude Code
 
@@ -93,6 +99,11 @@ claude mcp add ccx-admin -- node /path/to/ccx-admin-mcp/build/index.js \
 | `--basic-password <pass>` | `CCX_ADMIN_BASIC_PASSWORD` | HTTP basic auth password |
 | `--protect <true\|false>` | `CCX_PROTECT` | Block destructive tools (default `true`) |
 | `--dotenv <path>` | `CCX_ENV_FILE` | Explicit `.env` location (`--env-file` is taken by Node itself) |
+
+At startup the server checks the configuration, probes the admin login once
+(a failure is logged, not fatal, since tools log in lazily and retry), and
+then serves tools. Requests that get a 401 are retried once with a fresh
+session if they are reads; a mutation is never replayed automatically.
 | `-h`, `--help` | | Usage |
 
 ## Protection mode

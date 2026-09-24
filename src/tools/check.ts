@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { get } from "../client.js";
 import { hasBasicCredentials, hasSessionCredentials } from "../auth.js";
-import { fail, ok } from "../format.js";
+import { errorMessage, fail, ok } from "../format.js";
 import type { AuthCheckResponse, SuccessResponse } from "../types.js";
 
 export function register(server: McpServer) {
@@ -25,7 +25,7 @@ export function register(server: McpServer) {
           const r = (await get("/admin/check", { auth: "basic" })) as SuccessResponse;
           result.basic_check = r.success ? "ok" : r;
         } catch (e) {
-          result.basic_check = `failed: ${e instanceof Error ? e.message : String(e)}`;
+          result.basic_check = `failed: ${errorMessage(e)}`;
         }
       }
       if (hasSessionCredentials()) {
@@ -38,7 +38,7 @@ export function register(server: McpServer) {
             roles: (r.scopes ?? []).map((s) => `${s.type}:${s.role}`),
           };
         } catch (e) {
-          result.session_check = `failed: ${e instanceof Error ? e.message : String(e)}`;
+          result.session_check = `failed: ${errorMessage(e)}`;
         }
       }
       if (!hasBasicCredentials() && !hasSessionCredentials()) {

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { idSchema } from "../validate.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { post } from "../client.js";
 import { fail, ok } from "../format.js";
@@ -10,7 +10,7 @@ export function register(server: McpServer) {
       title: "Unsuspend user",
       description: "Lift a suspension so the CCX user can log in and use their datastores again.",
       inputSchema: {
-        user_id: z.string().min(1).describe("User UUID (see ccx_admin_list_users)"),
+        user_id: idSchema.describe("User UUID (see ccx_admin_list_users)"),
       },
       annotations: { destructiveHint: false, idempotentHint: true },
     },

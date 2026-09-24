@@ -6,6 +6,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { hasBasicCredentials, hasSessionCredentials, loginSession } from "./auth.js";
 import { loadDotenv } from "./env.js";
+import { errorMessage } from "./format.js";
 import { isProtected } from "./protect.js";
 
 import { register as registerCheck } from "./tools/check.js";
@@ -111,9 +112,13 @@ async function main() {
   }
 
   if (hasSessionCredentials()) {
-    process.stderr.write("CCX admin MCP: logging in as admin user...\n");
-    const who = await loginSession();
-    process.stderr.write(`CCX admin MCP: logged in as ${who.login}\n`);
+    // Probe only: tools log in lazily, so a transient outage must not keep the server from starting.
+    try {
+      const who = await loginSession();
+      process.stderr.write(`CCX admin MCP: logged in as ${who.login}\n`);
+    } catch (e) {
+      process.stderr.write(`CCX admin MCP: WARNING admin login failed, will retry on first use: ${errorMessage(e)}\n`);
+    }
   } else {
     process.stderr.write(
       "CCX admin MCP: only basic auth configured; datastore/user/audit/billing tools will be unavailable.\n",

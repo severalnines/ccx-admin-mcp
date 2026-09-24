@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { get } from "../client.js";
 import { hasBasicCredentials, hasSessionCredentials } from "../auth.js";
-import { fail, ok } from "../format.js";
+import { errorMessage, fail, ok } from "../format.js";
 import type { CountResponse, ListUsersResponse } from "../types.js";
 
 const INTERNAL_SUFFIXES = ["@severalnines.com", "@s9s.io"];
@@ -34,7 +34,7 @@ export function register(server: McpServer) {
           };
         } catch (e) {
           errors++;
-          result.customer_count = `failed: ${e instanceof Error ? e.message : String(e)}`;
+          result.customer_count = `failed: ${errorMessage(e)}`;
         }
       }
       if (hasSessionCredentials()) {
@@ -52,7 +52,7 @@ export function register(server: McpServer) {
           };
         } catch (e) {
           errors++;
-          result.all_users = `failed: ${e instanceof Error ? e.message : String(e)}`;
+          result.all_users = `failed: ${errorMessage(e)}`;
         }
       }
       if (Object.keys(result).length === 0) return fail("Error counting users", new Error("no credentials configured"));

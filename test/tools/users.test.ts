@@ -62,7 +62,12 @@ describe("ccx_admin_suspend_user", () => {
   it("posts {suspend:{reason}} when unprotected", async () => {
     setEnv({ session: true, protect: "false" });
     let body: unknown;
-    msw.use(http.post(`${API}/admin/users/u-1`, async ({ request }) => { body = await request.json(); return HttpResponse.json({}); }));
+    msw.use(http.post(`${API}/admin/users/u-1`, async ({ request }) => {
+      const denied = requireSession(request);
+      if (denied) return denied;
+      body = await request.json();
+      return HttpResponse.json({});
+    }));
     const r = await tools.call("ccx_admin_suspend_user", { user_id: "u-1", reason: "abuse" });
     expect(r.isError).toBe(false);
     expect(body).toEqual({ suspend: { reason: "abuse" } });
@@ -79,7 +84,12 @@ describe("ccx_admin_suspend_user", () => {
 describe("ccx_admin_unsuspend_user", () => {
   it("posts {unsuspend:{}} and is not protected", async () => {
     let body: unknown;
-    msw.use(http.post(`${API}/admin/users/u-2`, async ({ request }) => { body = await request.json(); return HttpResponse.json({}); }));
+    msw.use(http.post(`${API}/admin/users/u-2`, async ({ request }) => {
+      const denied = requireSession(request);
+      if (denied) return denied;
+      body = await request.json();
+      return HttpResponse.json({});
+    }));
     const r = await tools.call("ccx_admin_unsuspend_user", { user_id: "u-2" });
     expect(r.isError).toBe(false);
     expect(body).toEqual({ unsuspend: {} });
@@ -111,9 +121,28 @@ describe("ccx_admin_delete_user", () => {
 
   it("deletes when unprotected and confirmed", async () => {
     setEnv({ session: true, protect: "false" });
-    msw.use(http.delete(`${API}/admin/users/u-3`, () => HttpResponse.json({ deleted: true })));
+    msw.use(http.delete(`${API}/admin/users/u-3`, ({ request }) => requireSession(request) ?? HttpResponse.json({ deleted: true })));
     const r = await tools.call("ccx_admin_delete_user", { user_id: "u-3", confirm: true });
     expect(r.isError).toBe(false);
     expect(r.json()).toEqual({ user_id: "u-3", deleted: true });
+  });
+
+  it("rejects ids that would change the route before any request", async () => {
+    setEnv({ session: true, protect: "false" });
+    let called = false;
+    msw.use(http.delete(`${API}/admin/*`, () => { called = true; return HttpResponse.json({ deleted: true }); }));
+    for (const user_id of ["..", "../datastores", "u 1", "u/1", "u?x=1"]) {
+      const r = await tools.call("ccx_admin_delete_user", { user_id, confirm: true });
+      expect(r.isError, user_id).toBe(true);
+    }
+    expect(called).toBe(false);
+  });
+
+  it("only exposes the allow-listed user fields", async () => {
+    msw.use(http.get(`${API}/admin/users`, () => HttpResponse.json({ users: [
+      { id: "u-9", login: "x@example.com", first_name: "X", last_name: "Y", created_at: "2026-01-01T00:00:00Z", suspended: false, deleted: false, password_hash: "$2a$..." },
+    ] })));
+    const j = (await tools.call("ccx_admin_list_users")).json() as any;
+    expect(Object.keys(j.users[0]).sort()).toEqual(["created_at", "deleted", "first_name", "id", "last_name", "login", "suspended"]);
   });
 });

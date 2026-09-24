@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { regionSchema } from "../validate.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { get } from "../client.js";
 import { fail, ok } from "../format.js";
@@ -12,7 +12,7 @@ export function register(server: McpServer) {
       description:
         "List VPC ids known to CCX for an AWS region, with dangling-VPC detection fields. Requires basic auth credentials. NOTE: the backend currently only fills ccx_num_vpcs/ccx_vpc_ids and may return zero even when VPCs exist; treat an empty result as 'unknown', not 'none'.",
       inputSchema: {
-        region: z.string().min(1).describe("AWS region code, e.g. eu-north-1"),
+        region: regionSchema.describe("AWS region code, e.g. eu-north-1"),
       },
       annotations: { readOnlyHint: true, idempotentHint: true },
     },

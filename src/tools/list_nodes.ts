@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { idSchema } from "../validate.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { get } from "../client.js";
 import { fail, ok } from "../format.js";
@@ -35,7 +35,7 @@ export function register(server: McpServer) {
       description:
         "List the database and load-balancer nodes of a datastore: hostname, IP, role, cmon host status (e.g. CmonHostOnline), DB version, cloud instance id/type and availability zone.",
       inputSchema: {
-        datastore_id: z.string().min(1).describe("Datastore UUID"),
+        datastore_id: idSchema.describe("Datastore UUID"),
       },
       annotations: { readOnlyHint: true, idempotentHint: true },
     },

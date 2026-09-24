@@ -132,6 +132,16 @@ describe("ccx_admin_get_datastore", () => {
     });
   });
 
+  it("rejects path-like ids before calling the API", async () => {
+    let called = false;
+    msw.use(http.get(`${API}/admin/*`, () => { called = true; return HttpResponse.json({}); }));
+    for (const datastore_id of ["..", "../users", "a/b", ""]) {
+      const r = await tools.call("ccx_admin_get_datastore", { datastore_id });
+      expect(r.isError, datastore_id).toBe(true);
+    }
+    expect(called).toBe(false);
+  });
+
   it("surfaces not-found as an error naming the id", async () => {
     const r = await tools.call("ccx_admin_get_datastore", { datastore_id: "missing" });
     expect(r.isError).toBe(true);
@@ -171,13 +181,22 @@ describe("ccx_admin_get_datastore_audit", () => {
       limit: 3,
     })).json() as any;
     expect(query).toBe("?from=2026-09-01T00%3A00%3A00Z&limit=3");
-    expect(j.returned).toBe(3);
+    expect(j).toMatchObject({ fetched: 3, matched: 3, returned: 3, window_exhausted: true });
     expect(j.lines[0]).toMatchObject({ type: "job", text: "Job finished: remove_node" });
   });
 
-  it("filters by type client-side", async () => {
-    const j = (await tools.call("ccx_admin_get_datastore_audit", { datastore_id: "ds-1111-aaaa", type: "info" })).json() as any;
+  it("widens the server window when filtering by type and reports it", async () => {
+    let query = "";
+    msw.use(
+      http.get(`${API}/admin/datastores/:id/audit`, ({ request }) => {
+        query = new URL(request.url).search;
+        return HttpResponse.json(audit);
+      }),
+    );
+    const j = (await tools.call("ccx_admin_get_datastore_audit", { datastore_id: "ds-1111-aaaa", type: "info", limit: 5 })).json() as any;
+    expect(query).toBe("?limit=200");
     expect(j.lines.map((l: any) => l.type)).toEqual(["info"]);
+    expect(j).toMatchObject({ fetched: 3, matched: 1, returned: 1, window_exhausted: false });
   });
 });
 

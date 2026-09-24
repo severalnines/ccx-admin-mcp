@@ -17,13 +17,12 @@ export function parseDotenv(text: string): Record<string, string> {
     const m = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
     if (!m) continue;
     let value = m[2];
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
+    const quote = value[0] === '"' || value[0] === "'" ? value[0] : null;
+    const close = quote ? value.indexOf(quote, 1) : -1;
+    if (quote && close > 0) {
+      value = value.slice(1, close);
     } else {
-      // strip trailing inline comment
+      // unquoted: strip trailing inline comment
       const hash = value.indexOf(" #");
       if (hash >= 0) value = value.slice(0, hash).trimEnd();
     }
@@ -32,30 +31,28 @@ export function parseDotenv(text: string): Record<string, string> {
   return out;
 }
 
+/** Directory containing package.json, derived from this module's location. */
+export function packageRoot(): string {
+  return resolve(dirname(fileURLToPath(import.meta.url)), "..");
+}
+
 /**
- * Candidate .env locations, in priority order: an explicit path, the current
- * working directory, then the package root (so a checkout with a .env next to
- * package.json works no matter where the MCP client starts the process).
+ * Candidate .env locations: an explicit path, then the package root. The
+ * process working directory is deliberately NOT searched: MCP clients start
+ * servers inside arbitrary project directories, and a .env found there could
+ * turn protection off or point the credentials at another endpoint.
  */
 export function envFileCandidates(explicit?: string): string[] {
   const candidates: string[] = [];
   if (explicit) candidates.push(resolve(explicit));
-  candidates.push(resolve(process.cwd(), ".env"));
-  try {
-    const here = dirname(fileURLToPath(import.meta.url));
-    // build/env.js -> package root; src/env.ts -> package root
-    candidates.push(resolve(here, "..", ".env"));
-  } catch {
-    // import.meta.url unavailable (bundled) — skip
-  }
+  candidates.push(resolve(packageRoot(), ".env"));
   return [...new Set(candidates)];
 }
 
 /**
  * Load the first existing .env file into process.env. Only CCX_* keys are
- * imported, so a .env belonging to some other project in the working
- * directory cannot inject unrelated variables. Existing environment variables
- * are never overwritten. Returns the path that was loaded, or null.
+ * imported, and existing environment variables are never overwritten.
+ * Returns the path that was loaded, or null.
  */
 export function loadDotenv(explicit?: string): string | null {
   for (const path of envFileCandidates(explicit)) {

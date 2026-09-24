@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { http, HttpResponse } from "msw";
 import { msw, API, BASIC, SESSION, loginHandler, setEnv } from "./helpers.js";
 import { clearSession } from "../src/auth.js";
-import { get, post, ApiError, AuthConfigError } from "../src/client.js";
+import { get, post, del, ApiError, AuthConfigError } from "../src/client.js";
+import { getBaseUrl } from "../src/auth.js";
 
 beforeAll(() => msw.listen({ onUnhandledRequest: "error" }));
 afterAll(() => msw.close());
@@ -44,6 +45,73 @@ describe("session auth", () => {
     expect(r.users).toEqual([]);
     expect(calls).toBe(2);
     expect(counter.logins).toBe(2);
+  });
+
+  it("does not replay a mutation after a 401, but resets the session and says so", async () => {
+    const counter = { logins: 0 };
+    let calls = 0;
+    msw.use(
+      loginHandler(counter),
+      http.delete(`${API}/admin/users/u-1`, () => {
+        calls++;
+        return HttpResponse.json({ error: "session expired" }, { status: 401 });
+      }),
+    );
+    await expect(del("/admin/users/u-1")).rejects.toThrow(/401.*session was rejected/);
+    expect(calls).toBe(1);
+    expect(counter.logins).toBe(1);
+    // the next call logs in again with a fresh session
+    msw.use(http.get(`${API}/admin/users`, () => HttpResponse.json({ users: [] })));
+    await get("/admin/users");
+    expect(counter.logins).toBe(2);
+  });
+
+  it("shares one login between concurrent first requests", async () => {
+    const counter = { logins: 0 };
+    msw.use(
+      loginHandler(counter),
+      http.get(`${API}/admin/users`, () => HttpResponse.json({ users: [] })),
+      http.get(`${API}/admin/datastores`, () => HttpResponse.json({ clusters: [] })),
+    );
+    await Promise.all([get("/admin/users"), get("/admin/datastores"), get("/admin/users")]);
+    expect(counter.logins).toBe(1);
+  });
+
+  it("treats a non-JSON 200 as an error instead of empty data", async () => {
+    msw.use(
+      loginHandler(),
+      http.get(`${API}/admin/datastores`, () => new HttpResponse("<html>maintenance</html>", { status: 200, headers: { "Content-Type": "text/html" } })),
+    );
+    await expect(get("/admin/datastores")).rejects.toThrow(/expected JSON but got text\/html/);
+  });
+
+  it("issues the login request with redirects refused", async () => {
+    // msw's interceptor cannot follow a redirected POST at all, so a mocked
+    // redirect proves nothing here; assert the fetch option itself instead.
+    const spy = vi.spyOn(globalThis, "fetch");
+    try {
+      msw.use(loginHandler(), http.get(`${API}/admin/users`, () => HttpResponse.json({ users: [] })));
+      await get("/admin/users");
+      const loginCall = spy.mock.calls.find(([url]) => String(url).endsWith("/api/auth/admin-login"));
+      expect(loginCall, "login request").toBeDefined();
+      expect((loginCall![1] as RequestInit).redirect).toBe("error");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("refuses to follow a redirect on an API call, even to a working target", async () => {
+    let targetHit = false;
+    msw.use(
+      loginHandler(),
+      http.get(`${API}/admin/users`, () => new HttpResponse(null, { status: 302, headers: { Location: "https://evil.example/" } })),
+      http.get("https://evil.example/", () => {
+        targetHit = true;
+        return HttpResponse.json({ users: [] });
+      }),
+    );
+    await expect(get("/admin/users")).rejects.toThrow(/GET .* failed/);
+    expect(targetHit).toBe(false);
   });
 
   it("does not retry forever on a persistent 401", async () => {
@@ -155,10 +223,81 @@ describe("auth mode resolution", () => {
     expect(auth).toBe(BASIC);
   });
 
+  it("'any' falls back to basic when the session login is rejected", async () => {
+    setEnv({ session: true, basic: true });
+    process.env.CCX_ADMIN_PASSWORD = "wrong";
+    let auth: string | null = null;
+    msw.use(
+      loginHandler(),
+      http.get(`${API}/admin/datastores/billing/usage/json`, ({ request }) => {
+        auth = request.headers.get("authorization");
+        return HttpResponse.json({ datastores: [] });
+      }),
+    );
+    await get("/admin/datastores/billing/usage/json", { auth: "any" });
+    expect(auth).toBe(BASIC);
+  });
+
+  it("'any' falls back to basic when the session is rejected with 401", async () => {
+    setEnv({ session: true, basic: true });
+    const seen: string[] = [];
+    msw.use(
+      loginHandler(),
+      http.get(`${API}/admin/datastores/billing/usage/json`, ({ request }) => {
+        if (request.headers.get("cookie")) {
+          seen.push("session");
+          return HttpResponse.json({ error: "unauthorized" }, { status: 401 });
+        }
+        seen.push("basic");
+        return HttpResponse.json({ datastores: [] });
+      }),
+    );
+    await get("/admin/datastores/billing/usage/json", { auth: "any" });
+    expect(seen).toEqual(["session", "session", "basic"]);
+  });
+
+  it("'any' does not fall back on a non-auth failure", async () => {
+    setEnv({ session: true, basic: true });
+    let calls = 0;
+    msw.use(
+      loginHandler(),
+      http.get(`${API}/admin/datastores/billing/usage/json`, () => {
+        calls++;
+        return HttpResponse.json({ err: "boom" }, { status: 500 });
+      }),
+    );
+    await expect(get("/admin/datastores/billing/usage/json", { auth: "any" })).rejects.toThrow(/500/);
+    expect(calls).toBe(1);
+  });
+
   it("'any' fails clearly with no credentials at all", async () => {
     setEnv({ session: false, basic: false });
     await expect(get("/admin/datastores/billing/usage/json", { auth: "any" })).rejects.toThrow(
       /No admin credentials configured/,
     );
+  });
+});
+
+describe("base URL validation", () => {
+  it.each([
+    ["https://ccx.example.com", "https://ccx.example.com"],
+    ["https://ccx.example.com/", "https://ccx.example.com"],
+    ["https://ccx.example.com/sub/", "https://ccx.example.com/sub"],
+    ["http://localhost:8080", "http://localhost:8080"],
+    ["http://127.0.0.1:8080/", "http://127.0.0.1:8080"],
+  ])("accepts %s", (input, expected) => {
+    process.env.CCX_BASE_URL = input;
+    expect(getBaseUrl()).toBe(expected);
+  });
+
+  it.each([
+    ["http://ccx.example.com", /https:\/\//],
+    ["https://user:pw@ccx.example.com", /credentials/],
+    ["https://ccx.example.com/?x=1", /query/],
+    ["ccx.example.com", /not a valid URL/],
+    ["ftp://ccx.example.com", /https:\/\//],
+  ])("rejects %s", (input, pattern) => {
+    process.env.CCX_BASE_URL = input;
+    expect(() => getBaseUrl()).toThrow(pattern);
   });
 });

@@ -31,13 +31,67 @@ kubectl get secret admin-basic-auth -o jsonpath='{.data.ADMIN_AUTH_USERNAME}' | 
 kubectl get secret admin-basic-auth -o jsonpath='{.data.ADMIN_AUTH_PASSWORD}' | base64 -d
 ```
 
-## Quick start
+## Installation
+
+The server is published on npm as
+[`@severalnines/ccx-admin-mcp`](https://www.npmjs.com/package/@severalnines/ccx-admin-mcp).
+Node.js 18 or newer is required. Pick one of:
+
+| Method | Command | When |
+|--------|---------|------|
+| `npx` (no install) | `npx -y @severalnines/ccx-admin-mcp@latest` | Default; the MCP client fetches the latest release on start |
+| Global install | `npm install -g @severalnines/ccx-admin-mcp` then `ccx-admin-mcp` | Pinned version on an operator machine |
+| Project dependency | `npm install @severalnines/ccx-admin-mcp` then `node node_modules/@severalnines/ccx-admin-mcp/build/index.js` | When `npx` caching or spawning causes trouble |
+| From source | see below | Development, or to keep credentials in a `.env` next to the checkout |
+
+Pin `@latest` in `npx` invocations as shown; without it `npx` may serve a
+stale cached build.
+
+### Claude Code
 
 ```bash
-git clone <this repo> ccx-admin-mcp
+claude mcp add ccx-admin \
+  -e CCX_BASE_URL=https://ccx.example.com \
+  -e CCX_ADMIN_USERNAME=admin@example.com \
+  -e CCX_ADMIN_PASSWORD='...' \
+  -- npx -y @severalnines/ccx-admin-mcp@latest
+```
+
+The `-e` flags become environment variables of the registered server, so the
+password is not on the server's command line each time it starts. It is still
+visible in this one `claude mcp add` invocation and in your shell history; on
+a shared machine prefer the JSON configuration or a `.env` file. Restart
+Claude Code (or run `/mcp` and reconnect) afterwards.
+
+### Any MCP client (JSON config)
+
+```json
+{
+  "mcpServers": {
+    "ccx-admin": {
+      "command": "npx",
+      "args": ["-y", "@severalnines/ccx-admin-mcp@latest"],
+      "env": {
+        "CCX_BASE_URL": "https://ccx.example.com",
+        "CCX_ADMIN_USERNAME": "admin@example.com",
+        "CCX_ADMIN_PASSWORD": "..."
+      }
+    }
+  }
+}
+```
+
+With a global install use `"command": "ccx-admin-mcp"` and no `args`. Keep
+the file private: it holds the credentials in clear text.
+
+### From source, with a `.env` file
+
+```bash
+git clone https://github.com/severalnines/ccx-admin-mcp.git
 cd ccx-admin-mcp
-npm install && npm run build
-cp .env.example .env     # fill in CCX_BASE_URL and the credentials
+npm install             # also builds (prepare script)
+cp .env.example .env    # fill in CCX_BASE_URL and the credentials
+claude mcp add ccx-admin -- node "$PWD/build/index.js"
 ```
 
 Prefer the `.env` file (or the client's `env` block) over `--password` flags:

@@ -66,6 +66,28 @@ describe("session auth", () => {
     expect(counter.logins).toBe(2);
   });
 
+  it("accepts a body-less 2xx on a mutation", async () => {
+    msw.use(
+      loginHandler(),
+      http.post(`${API}/admin/users/u-1`, () => new HttpResponse(null, { status: 204 })),
+      http.delete(`${API}/admin/users/u-1`, () => new HttpResponse(null, { status: 200, headers: { "Content-Length": "0" } })),
+    );
+    await expect(post("/admin/users/u-1", { body: { unsuspend: {} } })).resolves.toBeNull();
+    await expect(del("/admin/users/u-1")).resolves.toBeNull();
+  });
+
+  it("does not trust a cookie from a non-JSON login response", async () => {
+    const { isSessionActive } = await import("../src/auth.js");
+    msw.use(
+      // plain Response: keeps msw's cookie jar from replaying the bogus cookie
+      http.post(`${API}/auth/admin-login`, () =>
+        new Response("<html>login</html>", { status: 200, headers: { "Content-Type": "text/html", "Set-Cookie": "ccx-session=bogus; Path=/" } }),
+      ),
+    );
+    await expect(get("/admin/users")).rejects.toThrow(/Admin login returned text\/html/);
+    expect(isSessionActive()).toBe(false);
+  });
+
   it("shares one login between concurrent first requests", async () => {
     const counter = { logins: 0 };
     msw.use(
@@ -256,6 +278,20 @@ describe("auth mode resolution", () => {
     expect(seen).toEqual(["session", "session", "basic"]);
   });
 
+  it("'any' never replays a mutation with the other credential set", async () => {
+    setEnv({ session: true, basic: true });
+    let calls = 0;
+    msw.use(
+      loginHandler(),
+      http.post(`${API}/admin/anything`, () => {
+        calls++;
+        return HttpResponse.json({ error: "unauthorized" }, { status: 401 });
+      }),
+    );
+    await expect(post("/admin/anything", { auth: "any", body: {} })).rejects.toThrow(/401/);
+    expect(calls).toBe(1);
+  });
+
   it("'any' does not fall back on a non-auth failure", async () => {
     setEnv({ session: true, basic: true });
     let calls = 0;
@@ -293,6 +329,7 @@ describe("base URL validation", () => {
   it.each([
     ["http://ccx.example.com", /https:\/\//],
     ["https://user:pw@ccx.example.com", /credentials/],
+    ["https://user:s3cret pw@ccx.example.com", /^((?!s3cret).)*$/],
     ["https://ccx.example.com/?x=1", /query/],
     ["ccx.example.com", /not a valid URL/],
     ["ftp://ccx.example.com", /https:\/\//],

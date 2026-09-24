@@ -29,7 +29,8 @@ export function getBaseUrl(): string {
   try {
     url = new URL(raw);
   } catch {
-    throw new Error(`CCX_BASE_URL is not a valid URL: ${raw}`);
+    // Never echo the value: an unparsable URL may be one with embedded credentials.
+    throw new Error("CCX_BASE_URL is not a valid URL");
   }
   if (url.username || url.password) {
     throw new Error("CCX_BASE_URL must not embed credentials");
@@ -104,6 +105,19 @@ async function doLogin(): Promise<AdminLoginResponse> {
     );
   }
 
+  // Validate the body before trusting the cookie: an HTML page with a
+  // Set-Cookie header is not a login.
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new LoginError(response.status, `Admin login returned ${contentType || "no content-type"} instead of JSON`);
+  }
+  let body: AdminLoginResponse;
+  try {
+    body = (await response.json()) as AdminLoginResponse;
+  } catch (e) {
+    throw new LoginError(response.status, `Admin login returned unparsable JSON: ${describeFetchError(e)}`);
+  }
+
   const setCookies = response.headers.getSetCookie?.() ?? [];
   const raw = setCookies.length > 0 ? setCookies.join("\n") : (response.headers.get("set-cookie") ?? "");
   const match = raw.match(/ccx-session=([^;\n]+)/);
@@ -112,7 +126,7 @@ async function doLogin(): Promise<AdminLoginResponse> {
   }
   sessionCookie = match[1];
 
-  return (await response.json()) as AdminLoginResponse;
+  return body;
 }
 
 /** Human-readable reason for a failed fetch (DNS, TLS, refused redirect, ...). */

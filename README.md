@@ -99,12 +99,12 @@ claude mcp add ccx-admin -- node /path/to/ccx-admin-mcp/build/index.js \
 | `--basic-password <pass>` | `CCX_ADMIN_BASIC_PASSWORD` | HTTP basic auth password |
 | `--protect <true\|false>` | `CCX_PROTECT` | Block destructive tools (default `true`) |
 | `--dotenv <path>` | `CCX_ENV_FILE` | Explicit `.env` location (`--env-file` is taken by Node itself) |
-
-At startup the server checks the configuration, probes the admin login once
-(a failure is logged, not fatal, since tools log in lazily and retry), and
-then serves tools. Requests that get a 401 are retried once with a fresh
-session if they are reads; a mutation is never replayed automatically.
 | `-h`, `--help` | | Usage |
+
+At startup the server validates the configuration and probes the admin login
+once. A rejected password or an invalid `CCX_BASE_URL` is fatal; a network
+failure is only logged, since tools log in lazily and retry. Reads that get a
+401 are retried once with a fresh session; a mutation is never sent twice.
 
 ## Protection mode
 

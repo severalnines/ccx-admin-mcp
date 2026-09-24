@@ -69,6 +69,7 @@ describe("loadDotenv", () => {
   it("searches the explicit path, then the package root, and never the working directory", () => {
     const expectedRoot = resolve(fileURLToPath(import.meta.url), "..", "..");
     expect(packageRoot()).toBe(expectedRoot);
+    expect(envFileCandidates()).toEqual([join(expectedRoot, ".env")]);
     expect(envFileCandidates("/x/.env")).toEqual(["/x/.env", join(expectedRoot, ".env")]);
     expect(envFileCandidates()).toEqual([join(expectedRoot, ".env")]);
     // even if cwd differs from the package root it must not be consulted

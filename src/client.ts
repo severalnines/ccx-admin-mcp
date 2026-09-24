@@ -129,6 +129,8 @@ async function exchange(method: string, path: string, opts: RequestOptions, auth
     throw new ApiError(response.status, path, (text || response.statusText) + hint);
   }
 
+  // A body-less success (204, or Content-Length: 0) is fine for mutations.
+  if (response.status === 204 || response.headers.get("content-length") === "0") return null;
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
     // e.g. an ingress serving the SPA for /api/*: never mistake that for an empty result.
@@ -144,20 +146,17 @@ function isAuthFailure(e: unknown): boolean {
 
 async function request(method: string, path: string, opts: RequestOptions = {}): Promise<unknown> {
   const auths = resolveAuth(opts.auth ?? "session");
-  let lastError: unknown;
   for (let i = 0; i < auths.length; i++) {
     try {
       return await exchange(method, path, opts, auths[i], false);
     } catch (e) {
-      // Fall through to the next credential set only on an auth failure.
-      if (i < auths.length - 1 && isAuthFailure(e)) {
-        lastError = e;
-        continue;
-      }
-      throw e;
+      // Fall through to the next credential set only on an auth failure, and
+      // only for reads: a mutation is never sent twice (same rule as the 401 retry).
+      const canFallBack = i < auths.length - 1 && method === "GET" && isAuthFailure(e);
+      if (!canFallBack) throw e;
     }
   }
-  throw lastError;
+  throw new Error("unreachable: no credential set was tried");
 }
 
 export function get(path: string, opts: RequestOptions = {}): Promise<unknown> {

@@ -31,9 +31,13 @@ export function parseDotenv(text: string): Record<string, string> {
   return out;
 }
 
-/** Directory containing package.json, derived from this module's location. */
-export function packageRoot(): string {
-  return resolve(dirname(fileURLToPath(import.meta.url)), "..");
+/** Directory containing package.json, or null when not running from a file: URL (bundled). */
+export function packageRoot(): string | null {
+  try {
+    return resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -45,7 +49,8 @@ export function packageRoot(): string {
 export function envFileCandidates(explicit?: string): string[] {
   const candidates: string[] = [];
   if (explicit) candidates.push(resolve(explicit));
-  candidates.push(resolve(packageRoot(), ".env"));
+  const root = packageRoot();
+  if (root) candidates.push(resolve(root, ".env"));
   return [...new Set(candidates)];
 }
 

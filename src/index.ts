@@ -4,7 +4,7 @@ import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { hasBasicCredentials, hasSessionCredentials, loginSession } from "./auth.js";
+import { LoginError, getBaseUrl, hasBasicCredentials, hasSessionCredentials, loginSession } from "./auth.js";
 import { loadDotenv } from "./env.js";
 import { errorMessage } from "./format.js";
 import { isProtected } from "./protect.js";
@@ -34,8 +34,9 @@ Options:
   --basic-username <name>     HTTP basic auth user (k8s secret admin-basic-auth, optional)
   --basic-password <pass>     HTTP basic auth password
   --protect <true|false>      Block destructive tools (default: true)
-  --dotenv <path>             .env file to load (default: ./.env, then <package>/.env)
-                              (not --env-file: Node itself consumes that flag)
+  --dotenv <path>             .env file to load (default: <package>/.env; the working
+                              directory is never searched). Not --env-file: Node
+                              itself consumes that flag.
   -h, --help                  Show this help and exit
 
 Environment variables (used when a flag is not given; a .env file fills in
@@ -103,6 +104,11 @@ async function main() {
   if (!process.env.CCX_BASE_URL) {
     die("Error: CCX_BASE_URL is not set (use --endpoint, the environment or a .env file).", 1);
   }
+  try {
+    getBaseUrl();
+  } catch (e) {
+    die(`Error: ${errorMessage(e)}`, 1);
+  }
   if (!hasSessionCredentials() && !hasBasicCredentials()) {
     die(
       "Error: no admin credentials. Set CCX_ADMIN_USERNAME/CCX_ADMIN_PASSWORD (recommended) " +
@@ -112,11 +118,16 @@ async function main() {
   }
 
   if (hasSessionCredentials()) {
-    // Probe only: tools log in lazily, so a transient outage must not keep the server from starting.
+    // Probe: a rejected password is a configuration error and fatal (re-sending
+    // it on every call could lock the account); anything else is transient and
+    // tools log in lazily later.
     try {
       const who = await loginSession();
       process.stderr.write(`CCX admin MCP: logged in as ${who.login}\n`);
     } catch (e) {
+      if (e instanceof LoginError && (e.status === 401 || e.status === 403)) {
+        die(`Error: ${e.message}`, 1);
+      }
       process.stderr.write(`CCX admin MCP: WARNING admin login failed, will retry on first use: ${errorMessage(e)}\n`);
     }
   } else {
@@ -163,7 +174,7 @@ function invokedDirectly(): boolean {
 }
 if (invokedDirectly()) {
   main().catch((err) => {
-    process.stderr.write(`CCX admin MCP fatal error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(`CCX admin MCP fatal error: ${errorMessage(err)}\n`);
     process.exit(1);
   });
 }

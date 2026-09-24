@@ -22,7 +22,7 @@
     "severalnines"
   ],
   "bin": {
-    "ccx-admin-mcp": "./build/index.js"
+    "ccx-admin-mcp": "build/index.js"
   },
   "files": [
     "build"

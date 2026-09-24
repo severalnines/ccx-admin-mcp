@@ -6,11 +6,11 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/doctorvibe/ccx-admin-mcp.git"
+    "url": "git+https://github.com/severalnines/ccx-admin-mcp.git"
   },
-  "homepage": "https://github.com/doctorvibe/ccx-admin-mcp#readme",
+  "homepage": "https://github.com/severalnines/ccx-admin-mcp#readme",
   "bugs": {
-    "url": "https://github.com/doctorvibe/ccx-admin-mcp/issues"
+    "url": "https://github.com/severalnines/ccx-admin-mcp/issues"
   },
   "keywords": [
     "mcp",

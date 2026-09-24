@@ -54,39 +54,8 @@ environment (or given as flags) always win over the file.
 localhost), and the server never follows redirects, so the admin password and
 session cookie cannot be replayed to another host.
 
-### Claude Code
-
-```bash
-claude mcp add ccx-admin -- node /path/to/ccx-admin-mcp/build/index.js
-```
-
-With the `.env` in place nothing else is needed. Flags work too and override
-both the environment and the file:
-
-```bash
-claude mcp add ccx-admin -- node /path/to/ccx-admin-mcp/build/index.js \
-  --endpoint https://ccx.example.com \
-  --username admin@example.com --password '...' \
-  --protect false
-```
-
-### Any MCP client (JSON config)
-
-```json
-{
-  "mcpServers": {
-    "ccx-admin": {
-      "command": "node",
-      "args": ["/path/to/ccx-admin-mcp/build/index.js"],
-      "env": {
-        "CCX_BASE_URL": "https://ccx.example.com",
-        "CCX_ADMIN_USERNAME": "admin@example.com",
-        "CCX_ADMIN_PASSWORD": "..."
-      }
-    }
-  }
-}
-```
+Flags override both the environment and the file, e.g. `--protect false` to
+unlock destructive tools for one registration.
 
 ### All flags
 

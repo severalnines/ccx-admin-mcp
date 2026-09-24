@@ -72,10 +72,10 @@ export type ToolCaller = {
 };
 
 /** Spin up the real MCP server with all tools and a client wired over an in-memory transport. */
-export async function connectTools(): Promise<ToolCaller> {
+export async function connectTools(opts: { protect?: boolean } = {}): Promise<ToolCaller> {
   const { registerAllTools } = await import("../src/index.js");
   const server = new McpServer({ name: "test", version: "0.0.0" });
-  registerAllTools(server);
+  registerAllTools(server, opts.protect ?? false);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: "test-client", version: "0.0.0" });
